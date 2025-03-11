@@ -1,37 +1,32 @@
 import { getAllProducts, getAllOrders } from '@/app/utils/shopify';
-import { createClient } from '@/app/utils/supabase';
+import { findAllProducts, syncProducts } from '@/app/database/product';
+import { findAllOrders, syncOrders } from '@/app/database/order';
 
 export const getServerSideProps = async () => {
-  const supabase = createClient();
 
-  await supabase
-    .from('shopify_product')
-    .delete().gt('id', 0);
+  try {
+    await getAllProducts()
+      .then(async (apiProducts) => {
+        await syncProducts( apiProducts.body.data );
+    });
+    
+    await getAllOrders()
+      .then(async (apiOrders) => {
+        await syncOrders( apiOrders.body.data );
+    });
 
-  await supabase
-    .from('shopify_order')
-    .delete().gt('id', 0);
+  } catch (error) {
+    return {
+      redirect: {
+        destination: '/500',
+        permanent: false,
+      },
+    }
+  }
 
-  const apiProducts = await getAllProducts();
-  var insertProducts = []
-  apiProducts.body.data.products.edges.map((datafetch, index) => (
-    insertProducts.push( { 'title': datafetch.node.title } )
-  ));
-  await supabase
-      .from('shopify_product')
-      .insert(insertProducts);
+  const products = await findAllProducts();
+  const orders = await findAllOrders();
 
-  const apiOrders = await getAllOrders();
-  var insertOrders = []
-  apiOrders.body.data.orders.edges.map((datafetch, index) => (
-    insertOrders.push( { 'gid': datafetch.node.id } )
-  ));
-  await supabase
-      .from('shopify_order')
-      .insert(insertOrders);
-
-  const products = await supabase.from("shopify_product").select();
-  const orders = await supabase.from("shopify_order").select();
   const data = {products: products, orders: orders};
   return {
     props: { data },
