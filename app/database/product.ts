@@ -17,17 +17,37 @@ export async function findAllProducts() {
 }
 
 export async function syncProducts({ products }) {
-
   const supabase = createClient();
-  await supabase
-    .from('shopify_product')
-    .delete().gt('id', 0);
-  
-  let insertProducts = []
-  products.edges.map((datafetch, index) => (
-    insertProducts.push( { 'title': datafetch.node.title } )
-  ));
-  await supabase
+
+  try {
+    // Clear existing products
+    const { error: deleteError } = await supabase
+      .from('shopify_product')
+      .delete()
+      .gt('id', 0);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    // Prepare products for insertion
+    const insertProducts = products.edges.map(({ node }) => ({
+      title: node.title,
+    }));
+
+    // Insert new products
+    const { error: insertError } = await supabase
       .from('shopify_product')
       .insert(insertProducts);
+
+    if (insertError) {
+      throw insertError;
+    }
+  } catch (error) {
+    console.error('Error syncing products:', error.message);
+    return {
+      status: 500,
+      error: 'Error syncing products to the database',
+    };
+  }
 }

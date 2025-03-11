@@ -17,18 +17,35 @@ export async function findAllOrders() {
 }
 
 export async function syncOrders({ orders }) {
-
   const supabase = createClient();
-  await supabase
-    .from('shopify_order')
-    .delete().gt('id', 0);
 
-  let insertOrders = []
-  orders.edges.map((datafetch, index) => (
-    insertOrders.push( { 'gid': datafetch.node.id } )
-  ));
-  await supabase
+  try {
+    // Delete existing orders
+    const { error: deleteError } = await supabase
+      .from('shopify_order')
+      .delete()
+      .gt('id', 0);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+
+    // Prepare orders for insertion
+    const insertOrders = orders.edges.map(({ node }) => ({ gid: node.id }));
+
+    // Insert new orders
+    const { error: insertError } = await supabase
       .from('shopify_order')
       .insert(insertOrders);
-}
 
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+  } catch (error) {
+    console.error('Error syncing orders:', error);
+    return {
+      status: 500,
+      error: 'Error syncing orders'
+    };
+  }
+}
